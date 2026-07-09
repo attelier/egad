@@ -25,7 +25,7 @@ Scores and severities are derived from the vectors, never hand-typed, so a typo 
  
 ## Arguing back
  
-These are judgment calls, made in the open and revised as we go. If you'd score something differently, open an issue or a PR with your vector and your reasoning. Bring a case, not a complaint.
+These are judgment calls, made in the open and revised as we go. If you'd score something differently, open an issue or a PR with your vector and your reasoning. Bring a case, not a complaint, we do change our minds.
  
 ---
  
