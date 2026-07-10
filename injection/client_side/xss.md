@@ -4,7 +4,7 @@ cwe: [CWE-79]
 owasp_top10: [A03:2021]
 capec: [CAPEC-591]
 status: canonical
-updated: 2026-07-08
+updated: 2026-07-11
 ---
 
 # Cross-Site Scripting (XSS)
@@ -81,25 +81,31 @@ any integrity impact is confined to that one user's data.
 CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:P/VC:N/VI:L/VA:N/SC:N/SI:L/SA:N
 ```
 
+Default vector. `VI` is the variable metric here: it starts at `VI:L` and rises to
+`VI:H` only when persistent, defacement-grade integrity impact is demonstrated
+(see Notes: Defacement).
+
 **Reasoning**
 
 - **UI:P** the payload runs on render, with no specific action from the victim,
   but the victim needs to be present during exploitation.
-- **VI:L** persistence on the server affects the page's rendering and data for
-  everyone who loads it, not just one clicker.
+- **VI:L (default)** persistence on the server affects the rendered content, a real
+  but limited integrity impact. Rises to `VI:H` only with demonstrated
+  defacement-grade control (see Notes).
 - **SI:L** same browser-rendering impact as the reflected case.
 
 **Q&A**
 
-*Why not High?* Same ceiling as reflected without a cookie: the impact is confined
-to the victim's browser rendering. Persistence widens *who* is affected (anyone
-who loads the page) but not *what* the script reaches, so it does not clear the
-bar on its own.
+*Why not always High?* `VI` is not automatically `High` for stored XSS.
+Persistence widens *who* is affected (anyone who loads the page) but not by itself
+*what* the script reaches. Absent demonstrated defacement-grade impact, `VI:L` is
+the honest default; `VI:H` must be earned by the PoC, not assumed from the bug
+class.
 
 *Why is VI Low here but None in the reflected no-cookie case?* Persistence. A
 stored payload lives on the server and affects the page's rendering and data for
-every loader, which is a real (if limited) integrity impact. A reflected payload
-that reaches nothing leaves the vulnerable system untouched (`VI:N`).
+every loader, which is a real (if arguably limited) integrity impact. A reflected
+payload that reaches nothing leaves the vulnerable system untouched (`VI:N`).
 
 ### SCENARIO 4 — Stored, cookie exfiltration
 
@@ -113,8 +119,9 @@ CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:P/VC:H/VI:H/VA:N/SC:N/SI:L/SA:N
   victim needs to be present during exploitation.
 - **VC:H** any user who loads the page can be hijacked, privileged accounts
   included.
-- **VI:H** the payload can act against the data of every user who renders it, not
-  just one.
+- **VI:H** the demonstrated impact resembles HTML-injection-grade defacement and
+  the payload can act against other users' stored data, which justifies `VI:H`
+  under FIRST (see Notes: Defacement).
 - **SC:N** the cookie is not sensitive in itself; what matters is what it grants.
 - **SI:L** subsequent-system impact is still the victim's browser rendering.
 
@@ -124,10 +131,11 @@ CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:P/VC:H/VI:H/VA:N/SC:N/SI:L/SA:N
 application, so the confidentiality loss is the app's (`VC`). The cookie is not
 the sensitive asset; what it unlocks is.
 
-*Why is VI High here but Low in Scenario 2?* Stored compromises everyone who loads
-the page, so the integrity impact spans that whole set of users, potentially
-including privileged accounts. Reflected reaches only the single victim who
-clicks, which is `VI:L`.
+*Why is VI High here but Low in Scenario 2?* The integrity impact resembles
+HTML-injection-grade defacement and can act against other users' stored data,
+which is what earns `VI:H` under FIRST. Reflected reaches only the single victim
+who clicks, which is `VI:L`. Reach across users is an indicator of extent, not by
+itself the basis for the metric.
 
 *Why not Critical?* `SI` stays Low. The script rewrites what a victim's browser
 renders; it does not compromise the subsequent system's own integrity. Critical
@@ -141,9 +149,21 @@ The reflected-to-stored integrity asymmetry (`VI:L` to `VI:H` in the cookie case
 Scenarios 2 and 4) is deliberate: reflected compromises whoever clicks, stored
 compromises whoever loads. That single metric is what separates them.
 
+**Defacement and VI.** Stored XSS earns `VI:H` only when it demonstrates
+persistent, attacker-controlled modification of content or data beyond the
+transient render, that is, HTML-injection-grade defacement or action against other
+users' stored data. The number of users exposed is an indicator of reach, not by
+itself a basis for `VI:H` under FIRST; the integrity impact is what sets the
+metric.
+
 Self-XSS (the victim must paste the payload into their own console or a field only
 they see) is not scored as XSS impact here. There is no realistic attacker path,
 so it does not clear the bar on its own.
+
+If cookie-bombing DoS is demonstrated on any of the cases, subsequent-system
+availability can climb from `SA:N` to `SA:L`. For now we consider this to not
+reasonably reach `SA:H` under any circumstances, as that would imply a general
+unusability of the subsequent system. Credits to Kaiksi for the note on this matter.
 
 ## Corrections
 
@@ -151,3 +171,9 @@ so it does not clear the bar on its own.
   was high vulnerable-system integrity (any loader affected, not one clicker). With
   `VI:L` the vector scores a full point lower, so the derived score now follows the
   reasoning instead of the typo.
+- **2026-07-11** Reconsidered `VI:H` in stored situations to a FIRST-compliant basis
+  (the H/L difference should not rest only on the number of users affected), moving
+  Scenario 3 to a `VI:L` default that rises to `VI:H` only on demonstrated
+  defacement-grade impact, while keeping a general indication of impact due to the
+  extent of users exposed. Additionally added potential availability impact thanks
+  to Kaiksi's comments on a recent report.
