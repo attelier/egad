@@ -89,9 +89,10 @@ Default vector. `VI` is the variable metric here: it starts at `VI:L` and rises 
 
 - **UI:P** the payload runs on render, with no specific action from the victim,
   but the victim needs to be present during exploitation.
-- **VI:L (default)** persistence on the server affects the rendered content, a real
-  but limited integrity impact. Rises to `VI:H` only with demonstrated
-  defacement-grade control (see Notes).
+- **VI:L (default)** the attacker wrote persistent, attacker-controlled data into
+  the app's store, which is a vulnerable-system integrity impact on its own terms,
+  independent of rendering (that is the `SI` axis). Real but limited; rises to
+  `VI:H` only with demonstrated defacement-grade control (see Notes).
 - **SI:L** same browser-rendering impact as the reflected case.
 
 **Q&A**
@@ -131,11 +132,15 @@ CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:P/VC:H/VI:H/VA:N/SC:N/SI:L/SA:N
 application, so the confidentiality loss is the app's (`VC`). The cookie is not
 the sensitive asset; what it unlocks is.
 
-*Why is VI High here but Low in Scenario 2?* The integrity impact resembles
-HTML-injection-grade defacement and can act against other users' stored data,
-which is what earns `VI:H` under FIRST. Reflected reaches only the single victim
-who clicks, which is `VI:L`. Reach across users is an indicator of extent, not by
-itself the basis for the metric.
+*Why is VI High here but Low in Scenario 3?* Because what changed between 3 and 4
+is not "a confidentiality mechanism" but the acquisition of the victim's
+authenticated write access. Cookie exfiltration is an authentication-defeat
+mechanism, not merely a confidentiality one: a stolen session yields both a read
+capability (`VC:H`) and a write capability. Acting as the victim (post, delete,
+change settings, transact) is a demonstrated integrity capability, exactly the
+kind the 07-11 principle says must be earned rather than assumed, and cookie-exfil
+to temporary ATO earns it. This is not double-counting the cookie; it is pricing
+the read side and the write side of one stolen session on their own axes.
 
 *Why not Critical?* `SI` stays Low. The script rewrites what a victim's browser
 renders; it does not compromise the subsequent system's own integrity. Critical
@@ -177,3 +182,11 @@ unusability of the subsequent system. Credits to Kaiksi for the note on this mat
   defacement-grade impact, while keeping a general indication of impact due to the
   extent of users exposed. Additionally added potential availability impact thanks
   to Kaiksi's comments on a recent report.
+- **2026-07-11 (2)** Rewrote Scenario 4's VI Q&A to state the Scenario 3 vs 4
+  distinction directly, absorbing an argument raised in review. Scenario 4's `VI:H`
+  is not justified by cookie exfiltration as a confidentiality mechanism (that is
+  `VC:H`) but by the authenticated write access a stolen session confers: acting as
+  the victim is a demonstrated integrity capability, which the 07-11 principle
+  requires. Also tightened Scenario 3's `VI:L` to rest on persistent
+  attacker-controlled data written to the app's store, independent of rendering
+  (the `SI` axis), rather than on rendered content.
