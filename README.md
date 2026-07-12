@@ -14,6 +14,10 @@ It exists for one moment in particular: a hacker looks at a verdict, goes *"what
  
 EGAD! is not a replacement for the [FIRST CVSS 4.0 spec](https://www.first.org/cvss/v4.0/specification-document). It's how *we* apply it to the calls that spark arguments. When we disagree with the spec, we say so and why.
  
+## There's a nicer way to read this
+
+This whole registry is deployed as a browsable site (search, cross-links, graph view) at **[egad.attelier.org](https://egad.attelier.org)**. Easier than clicking through Markdown files here.
+
 ## How it works
  
 The folder tree is the taxonomy. `injection/client_side/xss.md` says what XSS *is*. Each leaf is one vulnerability type and holds:
@@ -22,6 +26,12 @@ The folder tree is the taxonomy. `injection/client_side/xss.md` says what XSS *i
 - the **per-metric reasoning** behind each,
 - and, crucially, **where the line sits**. Why it isn't scored higher, and the case where it would be.
 Scores and severities are derived from the vectors, never hand-typed, so a typo can't quietly change a verdict.
+
+### On chains
+
+EGAD! maps weakness to taxonomy to criticality, so leaves and scenarios describe *individual* flaws, not chains. Don't expect something like "XSS that forces users to perform sensitive actions" to be scored as an XSS scenario. That's a chain: HTML injection (manipulating the page's rendering) plus CSRF (using the lack of CSRF validation on an endpoint to perform the action). Each link gets scored as what it is; the chain is the reporter's to assemble (even when most reports will get only one overall criticality score on platform).
+
+We get that *what* counts as an individual flaw is not something FIRST necessarily outlines. We draw those boundaries using the best of our knowledge and general weakness enumerations like CWE and OWASP API/Top 10. These mappings are themselves grounds for disagreement, provided you bring sufficient evidence. General complaints without actionable, verifiable corrections won't be considered.
  
 ## Arguing back
  
