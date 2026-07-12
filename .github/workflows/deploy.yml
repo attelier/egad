@@ -1,0 +1,54 @@
+name: Deploy EGAD! (Quartz) to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        # The Quartz project lives one level below the repo root. All npm/build
+        # steps run from here; the content it renders is the repo root (`..`).
+        working-directory: quartz
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so Quartz can derive page dates from git
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Build Quartz (content root is the repo root, one level up)
+        run: npx quartz build --directory ..
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Path is resolved from the repo root, not working-directory.
+          path: quartz/public
+
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

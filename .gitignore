@@ -1,0 +1,4 @@
+# Quartz build machinery. Derived artifacts, never committed: CI rebuilds them.
+quartz/node_modules/
+quartz/public/
+quartz/.quartz-cache/
