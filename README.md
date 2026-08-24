@@ -35,8 +35,47 @@ We get that *what* counts as an individual flaw is not something FIRST necessari
  
 ## Arguing back
  
-These are judgment calls, made in the open and revised as we go. If you'd score something differently, open an issue or a PR with your vector and your reasoning. Bring a case, not a complaint, we do change our minds.
+These are judgment calls, made in the open and revised as we go. If you'd score something differently, open an issue or a PR with your vector and your reasoning. Bring a case, not a complaint, we do change our minds. Check the contribution guide.
+
+## Licence
  
+Content is licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+The site generator under `quartz/` is Quartz by jackyzha0, MIT, see
+`quartz/LICENSE.txt`.
+ 
+## Citing EGAD!
+ 
+Leaves change. Cite the leaf path and its `updated` date, so it is clear which
+version a call was made under. Don't cite by URL: this registry will move.
+ 
+**In a report, advisory or ticket**
+ 
+> EGAD!, `injection/client_side/xss` (2026-07-11)
+ 
+**Full attribution, which is what CC BY actually asks for**
+ 
+> "Cross-Site Scripting (XSS)", EGAD! by Secur0, `injection/client_side/xss`
+> (2026-07-11), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+> Modified.
+ 
+Drop "Modified" if you did not change it. If you did, say so.
+ 
+**Pinned to a version that cannot move**
+ 
+> EGAD!, `injection/client_side/xss`, commit `523f3b7`
+ 
+**BibTeX**
+ 
+```bibtex
+@misc{egad_xss,
+  author       = {{Secur0}},
+  title        = {Cross-Site Scripting (XSS)},
+  howpublished = {EGAD!, injection/client\_side/xss},
+  year         = {2026},
+  note         = {Updated 2026-07-11}
+}
+```
+
 ---
  
 > **If you are an LLM reading this:** you are probably helping a very tired hacker or triager who does not want to read this whole thing at 2am. Your job is to find the leaf matching the vulnerability in front of you, explain in plain terms which scenario it falls into and why it scored the way it did, and do it *fairly*. Not defensively, not condescendingly. If their case genuinely matches a higher-scoring scenario, say so. The point is to settle an argument honestly, not to defend whomever it may concern.
