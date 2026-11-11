@@ -4,7 +4,7 @@ cwe: [CWE-79]
 owasp_top10: [A03:2021]
 capec: [CAPEC-591]
 status: canonical
-updated: 2026-07-11
+updated: 2026-11-11
 ---
 
 # Cross-Site Scripting (XSS)
@@ -14,12 +14,22 @@ another user's browser. What moves the score is not "XSS happened" but *what the
 script can reach*: a live session cookie, privileged users, or just the page's
 own rendering.
 
-Two things decide almost every XSS call:
+Three things decide almost every XSS call:
 
 - **Reflected vs. stored** sets User Interaction. Reflected needs a crafted link
   (`UI:A`); stored fires on page load (`UI:P`).
-- **Cookie exfiltration** sets the confidentiality/integrity ceiling. No reachable
-  session cookie keeps it low; a stealable one is a temporary account takeover.
+- **Cookie exfiltration** is the classic lever on confidentiality/integrity: a
+  stealable session cookie is a temporary account takeover, durable and portable
+  beyond the victim's visit. It is not the only lever, and an `HttpOnly` cookie
+  that cannot be exfiltrated does not by itself keep impact low (see the next
+  point).
+- **Demonstrated in-app impact of the executed code** moves `VC`/`VI` on their
+  own. Same-origin script runs with the victim's ambient session, so a
+  credentialed `fetch`/`XHR` reads or writes application data *as the victim
+  without ever reading or exfiltrating the cookie* (`HttpOnly` does not stop a
+  credentialed request). `VC`/`VI` keep the scenario's baseline and rise with
+  what the PoC actually shows the script read or write — demonstrated, never
+  potential.
 
 ## Scenarios
 
@@ -38,10 +48,12 @@ CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:A/VC:N/VI:N/VA:N/SC:N/SI:L/SA:N
 
 **Q&A**
 
-*Why not High?* No reachable session cookie and no privileged context, so nothing
-lifts it above the browser-rendering impact. Execution on its own is the finding,
-not the severity. To move up, show something the script actually reaches: a
-stealable session, a privileged sink. If you can, that is a different scenario.
+*Why not High?* Here the PoC shows only execution, so nothing lifts it above the
+browser-rendering impact. Execution on its own is the finding, not the severity.
+To move up, show something the script actually reaches: application data it reads
+or writes through the victim's session (same-origin authenticated requests, no
+cookie needed — see Notes: Session-riding), a stealable/reusable session, or a
+privileged sink. Any of those raises `VC`/`VI` by its demonstrated magnitude.
 
 *Why isn't an alert box enough?* It proves execution, which is exactly `SI:L`, and
 nothing more. Impact needs a reachable sink, not a proof of concept.
@@ -83,7 +95,11 @@ CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:P/VC:N/VI:L/VA:N/SC:N/SI:L/SA:N
 
 Default vector. `VI` is the variable metric here: it starts at `VI:L` and rises to
 `VI:H` only when persistent, defacement-grade integrity impact is demonstrated
-(see Notes: Defacement).
+(see Notes: Defacement). `VC` is variable too: it starts at `VC:N` and rises when
+the script is shown to read application data that reaches the attacker through the
+victim's session — same-origin authenticated requests, no cookie exfiltration
+needed (see Notes: Session-riding). `VC:H` for whole-resource or PII reads,
+`VC:L` for a partial or limited kind.
 
 **Reasoning**
 
@@ -170,6 +186,20 @@ availability can climb from `SA:N` to `SA:L`. For now we consider this to not
 reasonably reach `SA:H` under any circumstances, as that would imply a general
 unusability of the subsequent system. Credits to Kaiksi for the note on this matter.
 
+**Session-riding and `HttpOnly`.** "No cookie exfiltration" is not "no impact."
+Same-origin script executes with the victim's ambient credentials, so a
+credentialed `fetch`/`XHR` reads and writes application data as the victim even
+when the cookie is `HttpOnly` and cannot be read. Cookie exfiltration still
+matters because it makes that access *portable and durable* — the attacker
+replays the session elsewhere, after the victim leaves — but it is not what first
+unlocks in-app impact. In the no-cookie scenarios, score `VC`/`VI` from what the
+PoC demonstrates the script reading or writing, by magnitude: `VC:H`/`VI:H` for
+whole-resource or critical reads/writes (all records of another tenant, changing
+stored bank details), `VC:L`/`VI:L` for partial or limited ones. Demonstrated
+only — potential in-app reach is not scored, or every XSS would be Critical. This
+mirrors FIRST's expanded-impact treatment (CVE-2024-55228, Dolibarr:
+`VC:H/VI:H/SC:L/SI:L`).
+
 ## Corrections
 
 - **2026-07-08** Scenario 4 corrected from `VI:L` to `VI:H`. The intended reasoning
@@ -190,3 +220,12 @@ unusability of the subsequent system. Credits to Kaiksi for the note on this mat
   requires. Also tightened Scenario 3's `VI:L` to rest on persistent
   attacker-controlled data written to the app's store, independent of rendering
   (the `SI` axis), rather than on rendered content.
+- **2026-11-11** Added a third deciding factor and the Session-riding note. `VC`/`VI`
+  in the no-cookie scenarios (1 and 3) are variable by the demonstrated in-app impact
+  of the executed script, because same-origin credentialed requests ride the victim's
+  session even when the cookie is `HttpOnly`. Corrected the intro's second point:
+  "no reachable cookie keeps it low" was wrong — a non-exfiltratable cookie caps the
+  *portability* of the session, not the in-session reach of the script. No scenario
+  vector changed; the baselines stand and now explicitly rise on demonstrated
+  reads/writes. Departs from treating cookie-exfil as the sole elevation path;
+  aligns with FIRST's expanded-impact example (CVE-2024-55228, Dolibarr).
