@@ -11,8 +11,9 @@ updated: 2026-11-13
 
 Attacker-controlled input is reflected or stored and then executed as script in
 another user's browser. What moves the score is not "XSS happened" but *what the
-script can reach*: a live session cookie, privileged users, or just the page's
-own rendering.
+script can reach*: application data it reads or writes through the victim's
+session, a live session cookie, privileged users, or just the page's own
+rendering.
 
 Three things decide almost every XSS call:
 
@@ -65,9 +66,13 @@ CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:A/VC:H/VI:L/VA:N/SC:N/SI:L/SA:N
 **Reasoning**
 
 - **UI:A** requires a conscious click on a crafted link.
-- **VC:H** stealing the session cookie is a temporary account takeover; the impact
-  lands on the vulnerable system.
-- **VI:L** changes are possible but scoped to the single victim who clicks.
+- **VC:H** the stolen cookie is a standing credential for the account, usable from
+  the attacker's own machine for the life of the session, so the read capability is
+  not confined to the page or the visit. The impact lands on the vulnerable system.
+- **VI:L (default)** the write capability is the same standing credential, but
+  nothing persistent is written into the application and no other account's stored
+  data is reached, which are the two routes to `VI:H` in this leaf. Rises on a
+  demonstrated write past that account's own scope.
 - **SC:N** the cookie is not sensitive in itself; what matters is what it grants.
 - **SI:L** the payload alters rendering in the victim's browser.
 
@@ -77,13 +82,17 @@ CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:A/VC:H/VI:L/VA:N/SC:N/SI:L/SA:N
 application, so the confidentiality loss is the app's (`VC`). The cookie itself is
 not the sensitive asset; what it unlocks is.
 
-*Why VC:H and not VC:L?* A stolen session normally means acting as that user for
-its lifetime. It drops to `VC:L` only when the session genuinely grants little: no
-data worth reading, no actions worth taking. If that is the case, say so and it
-comes down.
+*Why VC:H and not VC:L?* Not by default. It is High because what the attacker ends
+up with is a standing credential, assessed by what the account behind it holds. Where
+that account holds data of consequence it is `VC:H`; where it genuinely grants little,
+no data worth reading and no actions worth taking, it is `VC:L`. Say which in the
+finding. Note that this is above where FIRST puts session abuse that stays inside the
+page, `VC:L`, and deliberately so: a stolen credential outlives the page.
 
-*Why is VI only Low?* A reflected payload reaches the single victim who clicks, so
-any integrity impact is confined to that one user's data.
+*Why is VI only Low?* Because neither route to `VI:H` is present. Nothing persistent
+is written into the application, and no stored data belonging to another account is
+reached. A reflected payload yields one account's write capability and no more. Show
+a write past that account's own scope and it rises.
 
 ### SCENARIO 3 — Stored, no cookie exfiltration
 
@@ -91,8 +100,10 @@ any integrity impact is confined to that one user's data.
 CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:P/VC:N/VI:L/VA:N/SC:N/SI:L/SA:N
 ```
 
-Default vector. `VI` is the variable metric here: `VI:L`, rising to `VI:H` only on
-demonstrated defacement-grade integrity impact (see Notes: Defacement). `VC` is
+Default vector. `VI` is the variable metric here: `VI:L`, rising to `VI:H` on either
+of the two routes this leaf allows, demonstrated defacement-grade integrity impact
+(see Notes: Defacement) or a demonstrated write past the victim's own scope (see
+Notes: Session-riding). `VC` is
 variable the same way: `VC:N` by default, rising when the script is shown to read
 application data through the victim's session, by magnitude (see Notes:
 Session-riding).
@@ -115,9 +126,10 @@ Persistence widens *who* is affected (anyone who loads the page) but not by itse
 the honest default; `VI:H` must be earned by the PoC, not assumed from the bug
 class.
 
-*Why is VI Low here but None in the reflected no-cookie case?* Persistence. A
-stored payload lives on the server and affects the page's rendering and data for
-every loader, which is a real (if arguably limited) integrity impact. A reflected
+*Why is VI Low here but None in the reflected no-cookie case?* Persistence. The
+attacker has written attacker-controlled data into the application's own store,
+which is an integrity impact on the vulnerable system whether or not anybody loads
+the page, and separate from what the render does (that is the `SI` axis). A reflected
 payload that reaches nothing leaves the vulnerable system untouched (`VI:N`).
 
 ### SCENARIO 4 — Stored, cookie exfiltration
@@ -148,8 +160,9 @@ the sensitive asset; what it unlocks is.
 number of users. The stolen session supplies the write capability without a separate
 PoC: holding a reusable credential for an account is the capability to act as that
 user, where Scenario 3 has to demonstrate each write it claims. And because the
-payload is stored it takes a session from every loader, so the writes reach the
-stored data of users other than any one victim, which is the basis the Defacement
+payload is stored it takes credentials from accounts other than the attacker's own,
+so the writes reach stored data that belongs to those accounts, which is the basis
+the Defacement
 note already sets for `VI:H`. Scenario 2 has the first of those and not the second:
 that basis is written for stored payloads, and a reflected one reaches only the
 account of whoever clicked, so there is no route to `VI:H` for it in this leaf.
@@ -170,15 +183,21 @@ report.
 
 ## Notes
 
-The reflected-to-stored integrity asymmetry (`VI:L` to `VI:H` in the cookie cases,
-Scenarios 2 and 4) is deliberate: reflected compromises whoever clicks, stored
-compromises whoever loads. That single metric is what separates them.
+The integrity asymmetry between the two cookie cases (`VI:L` in Scenario 2, `VI:H`
+in Scenario 4) is deliberate, and it is not the number of users. A stored payload
+writes attacker-controlled data into the application and takes a session from every
+loader, so its writes reach stored data belonging to accounts other than any one
+victim. A reflected payload does neither: nothing of it persists in the application
+and it yields a single account. Those are the two routes to `VI:H` below, and
+Scenario 2 is on neither.
 
-**Defacement and VI.** Stored XSS earns `VI:H` only when it demonstrates
-persistent, attacker-controlled modification of content or data beyond the
-transient render, that is, HTML-injection-grade defacement or action against other
-users' stored data. The number of users exposed is an indicator of reach, not by
-itself a basis for `VI:H` under FIRST; the integrity impact is what sets the
+**Defacement and VI.** There are two routes to `VI:H` and a finding needs one of
+them. The first is persistent, attacker-controlled modification of content or data
+beyond the transient render, that is, HTML-injection-grade defacement or action
+against other users' stored data. The second is a demonstrated write past what the
+victim's own account may do, which is the magnitude rule under Session-riding and
+does not require persistence. The number of users exposed is an indicator of reach,
+not by itself a basis for `VI:H` under FIRST; the integrity impact is what sets the
 metric.
 
 Self-XSS (the victim must paste the payload into their own console or a field only
@@ -248,6 +267,21 @@ service itself stops.
   requires. Also tightened Scenario 3's `VI:L` to rest on persistent
   attacker-controlled data written to the app's store, independent of rendering
   (the `SI` axis), rather than on rendered content.
+- **2026-11-13 (2)** Sweep for places that still encoded the pre-11-11 rule, after
+  review found the elevation rule restated in the Notes while four older passages
+  still justified metrics by how many users a payload reaches. Scenario 2's `VC:H` now
+  rests on the stolen cookie being a standing credential that outlives the page, with
+  the divergence from FIRST's `VC:L` stated, rather than on a default-High reading of
+  session access. Scenario 2's `VI:L` and the first Notes paragraph rest on neither
+  route to `VI:H` being present rather than on the single clicker. The Defacement note
+  and Scenario 3's header now name both routes, defacement-grade impact and a
+  demonstrated write past the victim's own scope, which were previously two different
+  tests in two places. The opening list of what the script can reach now includes
+  application data, which the intro calls the main lever. Scenario 3's persistence
+  Q&A now rests on attacker-controlled data being in the application's store rather
+  than on the render and on every loader, and Scenario 4's basis is stated as whose
+  stored data the writes reach rather than how many loaders supply a session. No
+  vector changed.
 - **2026-11-13** Second review pass. Scenario 4's `VI` Q&A no longer rests on cookie
   exfiltration conferring write access, which contradicted the intro and the note; it
   rests on the stolen session supplying that capability plus the Defacement basis of
