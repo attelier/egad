@@ -4,7 +4,7 @@ cwe: [CWE-79]
 owasp_top10: [A03:2021]
 capec: [CAPEC-591]
 status: canonical
-updated: 2026-11-12
+updated: 2026-11-13
 ---
 
 # Cross-Site Scripting (XSS)
@@ -144,15 +144,23 @@ CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:P/VC:H/VI:H/VA:N/SC:N/SI:L/SA:N
 application, so the confidentiality loss is the app's (`VC`). The cookie is not
 the sensitive asset; what it unlocks is.
 
-*Why is VI High here but Low in Scenario 3?* Because what changed between 3 and 4
-is not "a confidentiality mechanism" but the acquisition of the victim's
-authenticated write access. Cookie exfiltration is an authentication-defeat
-mechanism, not merely a confidentiality one: a stolen session yields both a read
-capability (`VC:H`) and a write capability. Acting as the victim (post, delete,
-change settings, transact) is a demonstrated integrity capability, exactly the
-kind the 07-11 principle says must be earned rather than assumed, and cookie-exfil
-to temporary ATO earns it. This is not double-counting the cookie; it is pricing
-the read side and the write side of one stolen session on their own axes.
+*Why is VI High here but Low in Scenario 3?* Two things carry it, and neither is the
+number of users. The stolen session supplies the write capability without a separate
+PoC: holding a reusable credential for an account is the capability to act as that
+user, where Scenario 3 has to demonstrate each write it claims. And because the
+payload is stored it takes a session from every loader, so the writes reach the
+stored data of users other than any one victim, which is the basis the Defacement
+note already sets for `VI:H`. Scenario 2 has the first of those and not the second:
+that basis is written for stored payloads, and a reflected one reaches only the
+account of whoever clicked, so there is no route to `VI:H` for it in this leaf.
+
+*Can Scenario 3 reach this same vector?* Yes, and that is the expected result rather
+than a mistake. A Scenario 3 PoC that demonstrates both reads and writes reaches
+`VC:H/VI:H` and scores 8.6, the same as this scenario, because the impact on the
+application is the same. What the stolen cookie adds over that is portability and
+durability: the attacker replays the session from their own machine after the victim
+has gone. Base CVSS 4.0 has no metric for that, so it belongs in the report text and
+not in the vector.
 
 *Why not Critical?* `SI` stays Low. The script rewrites what a victim's browser
 renders; it does not compromise the subsequent system's own integrity. Critical
@@ -182,19 +190,43 @@ availability can climb from `SA:N` to `SA:L`. For now we consider this to not
 reasonably reach `SA:H` under any circumstances, as that would imply a general
 unusability of the subsequent system. Credits to Kaiksi for the note on this matter.
 
-**Session-riding and `HttpOnly`.** "No cookie exfiltration" is not "no impact."
-Same-origin script executes with the victim's ambient credentials, so a
-credentialed `fetch`/`XHR` reads and writes application data as the victim even
-when the cookie is `HttpOnly` and cannot be read. Cookie exfiltration still
-matters because it makes that access *portable and durable* — the attacker
-replays the session elsewhere, after the victim leaves — but it is not what first
-unlocks in-app impact. In the no-cookie scenarios, score `VC`/`VI` from what the
-PoC demonstrates the script reading or writing, by magnitude: `VC:H`/`VI:H` for
-whole-resource or critical reads/writes (all records of another tenant, changing
-stored bank details), `VC:L`/`VI:L` for partial or limited ones. Demonstrated
-only — potential in-app reach is not scored, or every XSS would be Critical. This
-mirrors FIRST's expanded-impact treatment (CVE-2024-55228, Dolibarr:
-`VC:H/VI:H/SC:L/SI:L`).
+**Session-riding and `HttpOnly`.** No cookie exfiltration does not mean no impact.
+The script runs on the application's own origin, inside the page, so it can send
+requests to the application and read the responses. That is what `HttpOnly` leaves
+untouched: it stops JavaScript reading the cookie string, while the browser goes on
+attaching the cookie to every request the page makes.
+
+This is not CSRF and does not score like it. A cross-site request is sent blind,
+because the attacker's origin is not allowed to read the response, which is why a
+CSRF token or `SameSite` defeats it. Script running in the page reads the response,
+and reads the CSRF token out of the page as well, so neither defence applies. Being
+able to read is what lets `VC` move at all; CSRF would only ever reach `VI`.
+
+Score `VC` and `VI` from what the PoC demonstrates, and expect any combination.
+Impersonating the user or automating application actions carries no default
+severity. Reads and writes confined to what the victim's own account may already do
+are Low. High needs the demonstration to go past that scope: an administrative
+function, other users' records, a whole-resource read, a critical field such as
+stored bank details. Demonstrated only: potential reach is not scored, or every XSS
+would be Critical.
+
+Deletion stays on `VI`. A script that destroys the victim's records is performing a
+write, and `VA` is live only where the service stops working, which a script in a
+browser does not do. That is the rule set in `access_control/object_level/idor` and
+it holds here.
+
+FIRST's CVSS v4.0 Examples document works both ends of that range, and it is worth
+reading them together rather than citing only the high one. For CVE-2022-24682 it
+adds a variation titled impact to the vulnerable application and scores it
+`CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:A/VC:L/VI:L/VA:N/SC:L/SI:L/SA:N`, base 5.1, on the
+reasoning that user sessions could be abused to extract data from the application
+and user privileges to modify or delete it. That is ordinary session-scoped abuse and
+it is Low. For CVE-2024-55228 (Dolibarr) it scores
+`CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:A/VC:H/VI:H/VA:H/SC:L/SI:L/SA:N`, base 8.5, for an
+expanded impact reaching the application itself. Both vectors are FIRST's own, from
+that document rather than from the CVE records. We part from the second on one
+metric: it carries `VA:H`, and our availability rule does not reach `VA` unless the
+service itself stops.
 
 ## Corrections
 
@@ -216,6 +248,16 @@ mirrors FIRST's expanded-impact treatment (CVE-2024-55228, Dolibarr:
   requires. Also tightened Scenario 3's `VI:L` to rest on persistent
   attacker-controlled data written to the app's store, independent of rendering
   (the `SI` axis), rather than on rendered content.
+- **2026-11-13** Second review pass. Scenario 4's `VI` Q&A no longer rests on cookie
+  exfiltration conferring write access, which contradicted the intro and the note; it
+  rests on the stolen session supplying that capability plus the Defacement basis of
+  writes reaching other users' stored data, which Scenario 2 lacks. The Session-riding
+  note argues from same-origin read access rather than from a credentialed request,
+  which is the CSRF mechanism, and says why CSRF tokens and `SameSite` do not apply.
+  Magnitude carries no default: impersonation and automation score by demonstration,
+  session-scoped at Low, High only past the victim's own scope. Dropped the
+  cross-tenant example, kept deletion on `VI` per the IDOR leaf, and cited both ends
+  of FIRST's range instead of only Dolibarr, whose `VA:H` we do not follow.
 - **2026-11-12** Consolidation pass after review (elevation rule read finicky when
   stated in four places with drifting wording). The **Session-riding note is now the
   single source of truth** for how `VC`/`VI` rise on demonstrated in-app impact;
