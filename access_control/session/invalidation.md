@@ -4,16 +4,17 @@ cwe: [CWE-613]
 owasp_top10: [A07:2021]
 capec: [CAPEC-60]
 status: draft
-updated: 2026-11-12
+updated: 2026-11-13
 ---
 
 # Session Invalidation (CWE-613)
 
 A server-side session or token stays valid after an event that was supposed to
 end it. The mechanism is the same in every case; what decides the score is
-**which event failed to tear it down** — a control the victim actually relies on
-to evict an attacker, or a convenience. The deciding question is whether the
-finding hands anyone a capability they did not already have.
+**which event failed to tear it down**, and how completely: a control the victim
+actually relies on to evict an attacker, or a convenience, and whether anything
+usable is left behind. The deciding question is whether the finding hands anyone a
+capability they did not already have.
 
 Borders `injection/client_side/xss` (which prices session access, not its
 lifetime) and `access_control/object_level/idor`.
@@ -33,12 +34,21 @@ CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:N/VI:N/VA:N/SC:N/SI:N/SA:N
   capability**, so every impact metric is `N`.
 - Logout is a client-side convenience (dropping the local cookie). Obtaining the
   token in the first place is a separate flaw that must be demonstrated on its own.
+- This scenario is the server-side-only failure: logout clears the session on the
+  client and only the server-side session outlives it. If logout also leaves a
+  usable session in the browser, see the Q&A below.
 
 **Q&A**
 
-*So it's always Informational?* Yes, on its own. Administrative or upstream
+*So it's always Informational?* Yes, in this shape. Administrative or upstream
 revocation that should have ended a session but isn't re-checked at an endpoint is
-the same shape — no new capability over whoever already held the token.
+the same: no new capability over whoever already held the token.
+
+*What if logout leaves the session usable in the browser too?* That is a different
+finding and it is not Informational. The next person to use that browser gets a
+working session they never had, which is a new capability, so score it on what that
+session reaches. Bugcrowd's VRT draws the same line: *On Logout (Server-Side Only)*
+is P5, while *On Logout (Client and Server-Side)* is P4.
 
 ### SCENARIO 2 — Password change or reset does not invalidate existing sessions
 
@@ -69,10 +79,13 @@ vulnerable-system integrity impact on its own. Logout carries no such eviction
 function; it drops the local cookie as a convenience, so its failure adds nothing
 over whoever already held the token.
 
-*Isn't this the same N/A class as logout?* No. The VRT lists **Failure to Invalidate
-Session → On Password Reset and/or Change** as its own rated category (triaged P4 in
-public disclosures), separate from the logout entries — the taxonomy already treats
-them as two different findings.
+*Does the taxonomy back this?* In part, and the exact wording matters. Bugcrowd's
+VRT rates *Failure to Invalidate Session > On Password Reset and/or Change* at P4,
+and it rates *On Logout (Server-Side Only)*, which is the Scenario 1 shape, at P5.
+It also rates *On Logout (Client and Server-Side)* at P4, so the taxonomy does not
+separate password reset from logout as such. What it separates is a failure that
+leaves someone holding a usable session from one that does not, which is the same
+line drawn here.
 
 ### SCENARIO 3 — Session survives a privilege downgrade or account deletion
 
@@ -103,8 +116,8 @@ CVSS:4.0/AV:N/AC:L/AT:P/PR:L/UI:N/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N
 
 **Q&A**
 
-*Why does this score when logout doesn't, and why above the password-change floor?*
-Because the account's authorized rights actually shrank. Logout removes nothing the
+*Why does this score when logout doesn't?* Because the account's authorized rights
+actually shrank. Logout removes nothing the
 holder didn't already have, and a password change leaves the account's rights intact
 while only failing to evict. Here the authorization state was reduced or revoked and
 the session outlives it, so the holder exercises privileges the system has already
@@ -112,10 +125,16 @@ decided they should not have — a capability against the intended state, scored
 `VC`/`VI` by what the retained access demonstrably reaches, not on intent.
 
 *Why only Low by default?* The retained capability is bounded by what that account
-could already do; nothing beyond its former privilege is unlocked. The default stays
-`VC:L/VI:L` (Low 2.3) until a PoC demonstrates the magnitude of the retained access —
-a privileged write or a broad read raises the metric and the score with it (a
-demonstrated retained privileged write lands around Medium).
+could already do, so nothing beyond its former privilege is unlocked. The default is
+`VC:L/VI:L`, which scores 2.3, the same number as Scenario 2. The default is not what
+separates them. Scenario 2 sits at its floor because the account's rights never
+changed, so there is nothing for a PoC to raise; here the rights were reduced or
+revoked, and the metrics rise with what the retained access is demonstrably shown to
+reach. A demonstrated retained privileged write is `VC:L/VI:H`, which scores 6.0.
+
+Bugcrowd's VRT rates *Failure to Invalidate Session > On Permission Change* as
+Varies, which is the same treatment: the category has no fixed severity because it
+depends on what the retained privilege reaches.
 
 ## Notes
 
@@ -126,6 +145,11 @@ Informational. The victim has a dedicated, working control to evict the attacker
 so the password change not also doing it denies them nothing. The revocation must
 actually terminate the targeted session server-side; if *it* is what silently
 fails, that is the finding, not the password change.
+
+It does not reach Scenario 3. There the account's rights were reduced or revoked, so
+the session should have been ended by the system that made that decision, not by the
+account holder noticing and clearing it by hand. A session manager the user operates
+is not the control that failed.
 
 **Reset-token reuse is a different leaf.** "Reset token not invalidated after a new
 token / after use / after password change" is weak password-reset implementation,
@@ -149,3 +173,11 @@ anchored to the Bugcrowd VRT priorities, not scored here.
   default, Low 2.3, rising by demonstrated magnitude) because the session retains
   rights the account no longer has, a capability against the intended authorization
   state rather than mere persistence of still-authorized access.
+- **2026-11-13** Second review pass. Corrected the VRT citation in Scenario 2 against
+  the canonical taxonomy: *On Logout (Client and Server-Side)* is P4 as well, so the
+  split is not logout against password reset but whether a usable session is left
+  behind. Bounded Scenario 1 to the server-side-only shape (VRT P5) and added the
+  browser-usable case, which is not Informational. Removed Scenario 3's claim to score
+  above Scenario 2, whose 2.3 default it equals, and cited VRT *On Permission Change*
+  (Varies). Scoped the per-session-revocation carve-out away from Scenario 3 and
+  widened the opening to cover how completely the teardown failed.
